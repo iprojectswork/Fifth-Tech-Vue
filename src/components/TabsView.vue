@@ -33,7 +33,20 @@ const activeTab = computed({
 })
 
 const handleTabClick = (tab: any) => {
-  router.push(tab.props.name)
+  const path = tab.props.name
+  if (path.includes('?')) {
+    const [basePath, queryString] = path.split('?')
+    const query: Record<string, string> = {}
+    if (queryString) {
+      queryString.split('&').forEach(param => {
+        const [key, value] = param.split('=')
+        query[key] = value
+      })
+    }
+    router.push({ path: basePath, query })
+  } else {
+    router.push(path)
+  }
 }
 
 const handleTabRemove = (path: string) => {

@@ -66,7 +66,7 @@ const handleLogin = async () => {
         if (res.code === 200 && res.data.success) {
           localStorage.setItem('token', res.data.token || 'mock-token')
           ElMessage.success('登录成功')
-          router.push('/home')
+          router.push('/dashboard')
         } else {
           ElMessage.error(res.data.message || '登录失败')
         }

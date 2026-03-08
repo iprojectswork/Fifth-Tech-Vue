@@ -40,7 +40,11 @@
       <el-container class="content-container">
         <TabsView />
         <el-main>
-          <router-view />
+          <router-view v-slot="{ Component }">
+            <keep-alive>
+              <component :is="Component" :key="$route.fullPath" />
+            </keep-alive>
+          </router-view>
         </el-main>
       </el-container>
     </el-container>
@@ -92,25 +96,37 @@ const handleCommand = (command: string) => {
   }
 }
 
-watch(() => route.path, (newPath) => {
+watch(() => route.fullPath, (fullPath) => {
+  const path = route.path
   const titleMap: Record<string, string> = {
     '/dashboard': '首页',
     '/system': '系统管理',
-    '/system/user/list': '用户列表',
-    '/system/user/form': '用户表单'
+    '/system/user/list': '用户列表'
   }
   
-  const title = titleMap[newPath] || '未知页面'
-  const existingTab = tabsStore.tabs.find(t => t.path === newPath)
+  let title = titleMap[path]
+  if (!title) {
+    if (path === '/system/user/form') {
+      if (route.query.id) {
+        title = route.query.username as string || '编辑用户'
+      } else {
+        title = '新增用户'
+      }
+    } else {
+      title = '未知页面'
+    }
+  }
+  
+  const existingTab = tabsStore.tabs.find(t => t.path === fullPath)
   
   if (!existingTab) {
     tabsStore.addTab({
       title,
-      path: newPath,
-      closable: newPath !== '/dashboard'
+      path: fullPath,
+      closable: path !== '/dashboard'
     })
   } else {
-    tabsStore.setActiveTab(newPath)
+    tabsStore.setActiveTab(fullPath)
   }
 }, { immediate: true })
 </script>

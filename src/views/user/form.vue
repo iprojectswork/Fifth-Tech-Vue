@@ -38,10 +38,9 @@
           <el-col :span="12">
             <el-form-item label="状态" prop="status">
               <el-select v-model="form.status" placeholder="请选择状态">
-                <el-option label="未提交" :value="0" />
-                <el-option label="已提交" :value="1" />
-                <el-option label="已审核" :value="2" />
-                <el-option label="审批中" :value="10" />
+                <el-option label="未启用" :value="0" />
+                <el-option label="启用" :value="1" />
+                <el-option label="禁用" :value="2" />
               </el-select>
             </el-form-item>
           </el-col>

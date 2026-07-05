@@ -36,6 +36,24 @@ const routes: Array<RouteRecordRaw> = [
         name: 'UserForm',
         component: () => import('@/views/user/form.vue'),
         meta: { title: '用户表单' }
+      },
+      {
+        path: 'system/role/list',
+        name: 'RoleList',
+        component: () => import('@/views/system/role/list.vue'),
+        meta: { title: '角色管理' }
+      },
+      {
+        path: 'system/role/form',
+        name: 'RoleForm',
+        component: () => import('@/views/system/role/form.vue'),
+        meta: { title: '角色表单' }
+      },
+      {
+        path: 'system/permission/list',
+        name: 'PermissionList',
+        component: () => import('@/views/system/permission/list.vue'),
+        meta: { title: '权限管理' }
       }
     ]
   }

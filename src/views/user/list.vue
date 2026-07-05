@@ -26,6 +26,18 @@
         <div class="card-header">
           <div class="card-header-left">
             <el-button type="primary" @click="handleAdd">新增</el-button>
+            <el-dropdown @command="handleBatchStatusChange" :disabled="selectedRows.length === 0">
+              <el-button :disabled="selectedRows.length === 0">
+                状态变更
+                <el-icon class="el-icon--right"><arrow-down /></el-icon>
+              </el-button>
+              <template #dropdown>
+                <el-dropdown-menu>
+                  <el-dropdown-item :command="1">启用</el-dropdown-item>
+                  <el-dropdown-item :command="2">禁用</el-dropdown-item>
+                </el-dropdown-menu>
+              </template>
+            </el-dropdown>
             <el-button type="danger" @click="handleBatchDelete" :disabled="selectedRows.length === 0">批量删除</el-button>
           </div>
           <span v-if="selectedRows.length > 0" class="selected-info">已选择 {{ selectedRows.length }} 项</span>
@@ -40,11 +52,18 @@
           <el-table-column prop="nickname" label="昵称" width="120" />
           <el-table-column prop="email" label="邮箱" width="180" />
           <el-table-column prop="phone" label="手机号" width="120" />
-          <el-table-column prop="status" label="状态" width="100">
+          <el-table-column prop="status" label="状态" width="150">
             <template #default="{ row }">
-              <el-tag :type="getStatusType(row.status)">
-                {{ getStatusText(row.status) }}
-              </el-tag>
+              <div class="status-cell">
+                <el-switch
+                  v-model="row.status"
+                  :active-value="1"
+                  :inactive-value="2"
+                  active-text="启用"
+                  inactive-text="禁用"
+                  @change="handleStatusSwitchChange(row)"
+                />
+              </div>
             </template>
           </el-table-column>
           <el-table-column prop="createTime" label="创建时间" width="180">
@@ -79,8 +98,9 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { ArrowDown } from '@element-plus/icons-vue'
 import { useRouter } from 'vue-router'
-import { getUserList, deleteUser, type User, type UserQuery } from '@/api/user'
+import { getUserList, deleteUser, updateUserStatus, type User, type UserQuery } from '@/api/user'
 
 const router = useRouter()
 const tableData = ref<User[]>([])
@@ -148,6 +168,33 @@ const handleSelectionChange = (rows: User[]) => {
   selectedRows.value = rows
 }
 
+const handleBatchStatusChange = async (status: number) => {
+  if (selectedRows.value.length === 0) {
+    ElMessage.warning('请先选择要操作的用户')
+    return
+  }
+  const statusText = getStatusText(status)
+  ElMessageBox.confirm(`确定要将选中的 ${selectedRows.value.length} 个用户状态变更为"${statusText}"吗？`, '提示', {
+    confirmButtonText: '确定',
+    cancelButtonText: '取消',
+    type: 'warning'
+  }).then(async () => {
+    try {
+      const ids = selectedRows.value.map(row => row.id!)
+      const res = await updateUserStatus(ids, status)
+      if (res.code === 200) {
+        ElMessage.success(res.message || '批量状态变更成功')
+        selectedRows.value = []
+        fetchData()
+      } else {
+        ElMessage.error(res.message || '批量状态变更失败')
+      }
+    } catch (error: any) {
+      ElMessage.error(error.message || '批量状态变更失败')
+    }
+  }).catch(() => {})
+}
+
 const handleBatchDelete = () => {
   if (selectedRows.value.length === 0) {
     ElMessage.warning('请先选择要删除的用户')
@@ -180,10 +227,9 @@ const handleCurrentChange = (val: number) => {
 }
 
 const statusMap: Record<number, { text: string; type: string }> = {
-  0: { text: '未提交', type: 'info' },
-  1: { text: '已提交', type: 'warning' },
-  2: { text: '已审核', type: 'success' },
-  10: { text: '审批中', type: 'primary' }
+  0: { text: '未启用', type: 'info' },
+  1: { text: '启用', type: 'success' },
+  2: { text: '禁用', type: 'danger' }
 }
 
 const getStatusText = (status: number) => {
@@ -192,6 +238,21 @@ const getStatusText = (status: number) => {
 
 const getStatusType = (status: number) => {
   return statusMap[status]?.type || 'info'
+}
+
+const handleStatusSwitchChange = async (row: User) => {
+  try {
+    const res = await updateUserStatus([row.id!], row.status!)
+    if (res.code === 200) {
+      ElMessage.success(res.message || '状态变更成功')
+    } else {
+      row.status = row.status === 1 ? 2 : 1
+      ElMessage.error(res.message || '状态变更失败')
+    }
+  } catch (error: any) {
+    row.status = row.status === 1 ? 2 : 1
+    ElMessage.error(error.message || '状态变更失败')
+  }
 }
 
 const formatTime = (time: string | undefined) => {
@@ -274,5 +335,11 @@ onMounted(() => {
   justify-content: flex-end;
   padding-top: 5px;
   border-top: 1px solid var(--border);
+}
+
+.status-cell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 </style>

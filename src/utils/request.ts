@@ -1,5 +1,6 @@
 import axios, { AxiosInstance, InternalAxiosRequestConfig, AxiosResponse, AxiosError } from 'axios'
 import { ElMessage } from 'element-plus'
+import router from '@/router'
 
 const request: AxiosInstance = axios.create({
   baseURL: '/api',
@@ -24,7 +25,13 @@ request.interceptors.response.use(
     return response.data as T
   },
   (error: AxiosError) => {
-    ElMessage.error(error.message || '请求失败')
+    if (error.response?.status === 401) {
+      localStorage.removeItem('token')
+      router.push('/login')
+      ElMessage.error('登录已过期，请重新登录')
+    } else {
+      ElMessage.error(error.message || '请求失败')
+    }
     return Promise.reject(error)
   }
 )

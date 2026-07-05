@@ -54,3 +54,7 @@ export const updateUser = (data: User) => {
 export const deleteUser = (id: number) => {
   return request.delete<Result<void>>(`/user/${id}`)
 }
+
+export const updateUserStatus = (ids: number[], status: number) => {
+  return request.put<Result<void>>('/user/status', ids, { params: { status } })
+}

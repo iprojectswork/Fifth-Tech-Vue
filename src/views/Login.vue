@@ -35,7 +35,7 @@
 import { ref, reactive } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, FormInstance, FormRules } from 'element-plus'
-import { login } from '@/api/auth'
+import { login, getUserInfo, getMenus } from '@/api/auth'
 
 const router = useRouter()
 const loginFormRef = ref<FormInstance>()
@@ -64,8 +64,19 @@ const handleLogin = async () => {
       try {
         const res = await login(loginForm)
         if (res.code === 200 && res.data.success) {
-          localStorage.setItem('token', res.data.token || 'mock-token')
+          localStorage.setItem('token', res.data.token || '')
           ElMessage.success('登录成功')
+          
+          const userInfoRes = await getUserInfo()
+          if (userInfoRes.code === 200) {
+            localStorage.setItem('userInfo', JSON.stringify(userInfoRes.data))
+          }
+          
+          const menusRes = await getMenus()
+          if (menusRes.code === 200) {
+            localStorage.setItem('menus', JSON.stringify(menusRes.data))
+          }
+          
           router.push('/dashboard')
         } else {
           ElMessage.error(res.data.message || '登录失败')

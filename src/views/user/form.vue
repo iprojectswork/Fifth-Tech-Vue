@@ -4,7 +4,7 @@
       <el-button type="primary" @click="handleSubmit">保存</el-button>
       <el-button @click="handleBack">关闭</el-button>
     </div>
-    <el-card class="form-card">
+    <el-card class="form-card" shadow="never">
       <template #header>
         <span class="card-title">基本信息</span>
       </template>
@@ -46,19 +46,36 @@
           </el-col>
         </el-row>
       </el-form>
+
+      <el-tabs type="border-card">
+          <el-tab-pane label="User">User</el-tab-pane>
+          <el-tab-pane label="Config">Config</el-tab-pane>
+          <el-tab-pane label="Role">Role</el-tab-pane>
+          <el-tab-pane label="Task">Task</el-tab-pane>
+        </el-tabs>
+
     </el-card>
+
+    <el-tabs type="border-card">
+          <el-tab-pane label="User">User</el-tab-pane>
+          <el-tab-pane label="Config">Config</el-tab-pane>
+          <el-tab-pane label="Role">Role</el-tab-pane>
+          <el-tab-pane label="Task">Task</el-tab-pane>
+        </el-tabs>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
-import { useRouter, useRoute } from 'vue-router'
+import { useRoute } from 'vue-router'
 import type { FormInstance, FormRules } from 'element-plus'
 import { addUser, updateUser, getUserById, type User } from '@/api/user'
+import { useNavigation } from '@/composables/useNavigation'
 
-const router = useRouter()
 const route = useRoute()
+// 关闭/保存成功必须关页签，不能只 router.push 列表（否则页签残留）
+const { closeCurrentTab } = useNavigation()
 const formRef = ref<FormInstance>()
 const isEdit = ref(false)
 
@@ -131,8 +148,9 @@ const handleSubmit = async () => {
   })
 }
 
-const handleBack = () => {
-  router.push('/system/user/list')
+/** 工具栏「关闭」与保存成功：关掉当前详情 tab，再按邻近规则切换 */
+const handleBack = async () => {
+  await closeCurrentTab('/system/user/list')
 }
 
 onMounted(() => {

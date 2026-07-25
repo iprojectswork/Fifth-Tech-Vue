@@ -92,10 +92,11 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
-import { User, Setting, Document, Bell, DataLine, Monitor, Files, Message } from '@element-plus/icons-vue'
+import { User, Setting, Document, Bell, DataLine, Message } from '@element-plus/icons-vue'
+import { useNavigation } from '@/composables/useNavigation'
 
-const router = useRouter()
+// 快捷入口 = 传送门：openPath 会进域并打开/激活业务 tab
+const { openPath } = useNavigation()
 const loginTime = ref('')
 
 const stats = ref([
@@ -117,7 +118,7 @@ onMounted(() => {
 })
 
 const navigateTo = (path: string) => {
-  router.push(path)
+  void openPath(path)
 }
 </script>
 

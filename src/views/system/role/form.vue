@@ -31,12 +31,14 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { useRoute } from 'vue-router'
 import { ElMessage, FormInstance, FormRules } from 'element-plus'
 import { getRoleById, addRole, updateRole } from '@/api/role'
+import { useNavigation } from '@/composables/useNavigation'
 
 const route = useRoute()
-const router = useRouter()
+// 返回/提交成功：关当前页签，避免只改路由导致 tab 残留
+const { closeCurrentTab } = useNavigation()
 const formRef = ref<FormInstance>()
 
 const isEdit = ref(false)
@@ -76,14 +78,14 @@ const handleSubmit = async () => {
       await addRole(formData)
       ElMessage.success('新增成功')
     }
-    router.push('/system/role/list')
+    await closeCurrentTab('/system/role/list')
   } catch (error: any) {
     ElMessage.error(error.message || '操作失败')
   }
 }
 
-const handleBack = () => {
-  router.back()
+const handleBack = async () => {
+  await closeCurrentTab('/system/role/list')
 }
 
 onMounted(() => {

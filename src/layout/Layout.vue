@@ -1,24 +1,82 @@
+<!--
+  B1 主布局：工作台壳 / 域壳
+  - 顶栏：Logo、工作台、一级域、更多、用户
+  - 域壳才显示侧栏 + TabsView
+  - 内容 keep-alive key = route.fullPath（跟 URL，不跟 activeTabKey，避免关 tab 时内容抢先切换）
+  逻辑见 composables/useNavigation.ts；契约 docs/B1-NAVIGATION.md
+-->
 <template>
   <el-container class="layout-container">
-    <el-header>
+    <el-header class="layout-header">
       <div class="header-content">
-        <div class="logo">Vue Demo</div>
-        <el-menu
-          :default-active="activeMenu"
-          mode="horizontal"
-          @select="handleMenuSelect"
-          class="top-menu"
-        >
-          <el-menu-item v-for="menu in topMenus" :key="menu.id" :index="String(menu.id)">
-            {{ menu.permissionName }}
-          </el-menu-item>
-        </el-menu>
+        <!-- Logo / 工作台：出域回门户 -->
+        <div class="logo" @click="onWorkbench">Vue Demo</div>
+
+        <nav class="top-nav">
+          <button
+            type="button"
+            class="nav-item"
+            :class="{ active: isWorkbench }"
+            @click="onWorkbench"
+          >
+            工作台
+          </button>
+
+          <!-- 一级域平铺（前 TOP_NAV_VISIBLE_COUNT 个） -->
+          <button
+            v-for="domain in visibleDomains"
+            :key="domain.id"
+            type="button"
+            class="nav-item"
+            :class="{ active: shellDomainId === domain.id }"
+            @click="onEnterDomain(domain.id)"
+          >
+            {{ domain.permissionName }}
+          </button>
+
+          <!-- 溢出一级：hover 延迟展开 + click 立即 toggle -->
+          <div
+            v-if="moreDomains.length > 0"
+            ref="moreWrapRef"
+            class="nav-more-wrap"
+            @mouseenter="onMoreEnter"
+            @mouseleave="onMoreLeave"
+          >
+            <button
+              type="button"
+              class="nav-item nav-more-trigger"
+              :class="{ active: moreContainsActive, open: moreOpen }"
+              @click.stop="onMoreClick"
+            >
+              更多
+              <el-icon class="more-arrow"><ArrowDown /></el-icon>
+            </button>
+            <div
+              v-show="moreOpen"
+              class="more-dropdown"
+              @mouseenter="onMorePanelEnter"
+              @mouseleave="onMoreLeave"
+            >
+              <button
+                v-for="domain in moreDomains"
+                :key="domain.id"
+                type="button"
+                class="more-item"
+                :class="{ active: shellDomainId === domain.id }"
+                @click="onMoreSelect(domain.id)"
+              >
+                {{ domain.permissionName }}
+              </button>
+            </div>
+          </div>
+        </nav>
+
         <div class="user-info">
           <el-dropdown @command="handleCommand">
             <span class="el-dropdown-link">
               <el-icon><User /></el-icon>
               {{ username }}
-              <el-icon class="el-icon--right"><arrow-down /></el-icon>
+              <el-icon class="el-icon--right"><ArrowDown /></el-icon>
             </span>
             <template #dropdown>
               <el-dropdown-menu>
@@ -29,24 +87,30 @@
         </div>
       </div>
     </el-header>
-    <el-container>
-      <el-aside v-if="currentSidebarMenus.length > 0" width="200px">
+
+    <el-container class="body-container">
+      <!-- 仅域壳显示侧栏；key 只用 domainId，避免切 tab 时整树重挂载丢折叠态 -->
+      <el-aside v-if="showSidebar" width="200px" class="layout-aside">
         <el-menu
-          :default-active="sidebarActiveMenu"
-          @select="handleSidebarSelect"
+          :key="String(shellDomainId ?? 'none')"
+          :default-active="sidebarActivePath"
           class="sidebar-menu"
+          @select="onSidebarSelect"
         >
-          <el-menu-item v-for="menu in currentSidebarMenus" :key="menu.id" :index="menu.path">
-            {{ menu.permissionName }}
-          </el-menu-item>
+          <SidebarMenuNodes :menus="sidebarMenus" />
         </el-menu>
       </el-aside>
+
       <el-container class="content-container">
-        <TabsView />
+        <TabsView v-if="showTabsBar" />
         <el-main>
           <router-view v-slot="{ Component }">
-            <keep-alive>
-              <component :is="Component" :key="$route.fullPath" />
+            <keep-alive :max="30">
+              <component
+                :is="Component"
+                v-if="Component"
+                :key="route.fullPath"
+              />
             </keep-alive>
           </router-view>
         </el-main>
@@ -56,141 +120,174 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { User, ArrowDown } from '@element-plus/icons-vue'
-import { useTabsStore } from '@/store/tabs'
 import { logout } from '@/api/auth'
 import TabsView from '@/components/TabsView.vue'
-import type { MenuItem } from '@/api/auth'
+import SidebarMenuNodes from '@/components/SidebarMenuNodes.vue'
+import { useNavigation } from '@/composables/useNavigation'
+import {
+  TOP_NAV_VISIBLE_COUNT,
+  MORE_OPEN_DELAY,
+  MORE_CLOSE_DELAY
+} from '@/constants/nav'
+import type { DomainId } from '@/utils/menu'
 
 const route = useRoute()
-const router = useRouter()
-const tabsStore = useTabsStore()
-
-const menuTree = ref<MenuItem[]>([])
-const flatMenus = ref<MenuItem[]>([])
 const username = ref('管理员')
 
-const flattenMenus = (menus: MenuItem[], parentId: number = 0): MenuItem[] => {
-  const result: MenuItem[] = []
-  menus.forEach(menu => {
-    const flatMenu: MenuItem = { ...menu, parentId, children: undefined }
-    result.push(flatMenu)
-    if (menu.children && menu.children.length > 0) {
-      result.push(...flattenMenus(menu.children, menu.id))
-    }
-  })
-  return result
+const {
+  isWorkbench,
+  shellDomainId,
+  showSidebar,
+  showTabsBar,
+  sidebarMenus,
+  sidebarActivePath,
+  ensureMenusLoaded,
+  goWorkbench,
+  enterDomain,
+  openPath,
+  syncRoute,
+  clearSessionNav,
+  menuStore
+} = useNavigation()
+
+// —— 「更多」下拉：延迟 hover + click ——
+const moreOpen = ref(false)
+const moreWrapRef = ref<HTMLElement | null>(null)
+let openTimer: ReturnType<typeof setTimeout> | null = null
+let closeTimer: ReturnType<typeof setTimeout> | null = null
+
+const visibleDomains = computed(() => menuStore.topDomains.slice(0, TOP_NAV_VISIBLE_COUNT))
+const moreDomains = computed(() => menuStore.topDomains.slice(TOP_NAV_VISIBLE_COUNT))
+const moreContainsActive = computed(() => {
+  const id = shellDomainId.value
+  if (id == null) return false
+  return moreDomains.value.some((d) => d.id === id)
+})
+
+function clearOpenTimer() {
+  if (openTimer) {
+    clearTimeout(openTimer)
+    openTimer = null
+  }
+}
+
+function clearCloseTimer() {
+  if (closeTimer) {
+    clearTimeout(closeTimer)
+    closeTimer = null
+  }
+}
+
+function onMoreEnter() {
+  clearCloseTimer()
+  clearOpenTimer()
+  openTimer = setTimeout(() => {
+    moreOpen.value = true
+  }, MORE_OPEN_DELAY)
+}
+
+function onMorePanelEnter() {
+  clearCloseTimer()
+  clearOpenTimer()
+  moreOpen.value = true
+}
+
+function onMoreLeave() {
+  clearOpenTimer()
+  clearCloseTimer()
+  closeTimer = setTimeout(() => {
+    moreOpen.value = false
+  }, MORE_CLOSE_DELAY)
+}
+
+function onMoreClick() {
+  clearOpenTimer()
+  clearCloseTimer()
+  moreOpen.value = !moreOpen.value
+}
+
+async function onMoreSelect(domainId: DomainId) {
+  moreOpen.value = false
+  await enterDomain(domainId)
+}
+
+function onDocClick(e: MouseEvent) {
+  if (!moreOpen.value) return
+  const el = moreWrapRef.value
+  if (el && e.target instanceof Node && !el.contains(e.target)) {
+    moreOpen.value = false
+  }
+}
+
+function onEsc(e: KeyboardEvent) {
+  if (e.key === 'Escape') moreOpen.value = false
 }
 
 onMounted(() => {
+  ensureMenusLoaded()
   const userInfoStr = localStorage.getItem('userInfo')
   if (userInfoStr) {
-    const userInfo = JSON.parse(userInfoStr)
-    username.value = userInfo.nickname || userInfo.username || '管理员'
+    try {
+      const userInfo = JSON.parse(userInfoStr)
+      username.value = userInfo.nickname || userInfo.username || '管理员'
+    } catch {
+      // ignore bad JSON
+    }
   }
-  
-  const menusStr = localStorage.getItem('menus')
-  if (menusStr) {
-    menuTree.value = JSON.parse(menusStr)
-    flatMenus.value = flattenMenus(menuTree.value)
-  }
+  // 深链/刷新：按当前 URL 建/激活 tab
+  syncRoute(route)
+  document.addEventListener('click', onDocClick)
+  document.addEventListener('keydown', onEsc)
 })
 
-const topMenus = computed(() => {
-  return menuTree.value
+onUnmounted(() => {
+  clearOpenTimer()
+  clearCloseTimer()
+  document.removeEventListener('click', onDocClick)
+  document.removeEventListener('keydown', onEsc)
 })
 
-const currentSidebarMenus = computed(() => {
-  const path = route.path
-  const currentMenu = flatMenus.value.find(menu => menu.path === path)
-  if (currentMenu && currentMenu.parentId !== 0) {
-    return flatMenus.value.filter(menu => menu.parentId === currentMenu.parentId)
+// 路由变化 → 同步 Pinia 页签（侧栏点菜单、页签切换、浏览器前进后退）
+watch(
+  () => route.fullPath,
+  () => {
+    syncRoute(route)
   }
-  return []
-})
+)
 
-const activeMenu = computed(() => {
-  const path = route.path
-  const currentMenu = flatMenus.value.find(menu => menu.path === path)
-  if (currentMenu) {
-    return String(currentMenu.parentId)
-  }
-  return ''
-})
-
-const sidebarActiveMenu = computed(() => {
-  return route.path
-})
-
-const handleMenuSelect = (index: string) => {
-  const menuId = parseInt(index)
-  const topMenu = menuTree.value.find(m => m.id === menuId)
-  if (topMenu && topMenu.children && topMenu.children.length > 0) {
-    router.push(topMenu.children[0].path)
-  }
+async function onWorkbench() {
+  await goWorkbench()
 }
 
-const handleSidebarSelect = (index: string) => {
-  router.push(index)
+async function onEnterDomain(domainId: DomainId) {
+  await enterDomain(domainId)
+}
+
+async function onSidebarSelect(index: string) {
+  if (!index) return
+  await openPath(index)
 }
 
 const handleCommand = async (command: string) => {
   if (command === 'logout') {
     try {
       await logout()
-    } catch (e) {
+    } catch {
+      // 登出接口失败仍清本地会话
     }
     localStorage.removeItem('token')
     localStorage.removeItem('userInfo')
     localStorage.removeItem('menus')
+    clearSessionNav()
     ElMessage.success('退出登录成功')
+    const { default: router } = await import('@/router')
     router.push('/login')
   }
 }
-
-const getTabTitle = (path: string, query: Record<string, string>): string => {
-  if (path === '/system/user/form') {
-    if (query.id) {
-      return query.username || '编辑用户'
-    }
-    return '新增用户'
-  }
-  if (path === '/system/role/form') {
-    if (query.id) {
-      return query.name || '编辑角色'
-    }
-    return '新增角色'
-  }
-  if (path === '/system/permission/form') {
-    if (query.id) {
-      return query.name || '编辑权限'
-    }
-    return '新增权限'
-  }
-  const menu = flatMenus.value.find(m => m.path === path)
-  return menu?.permissionName || '页面'
-}
-
-watch(() => route, (newRoute) => {
-  const path = newRoute.path
-  const query = newRoute.query as Record<string, string>
-  const fullPath = newRoute.fullPath
-  
-  const existingTab = tabsStore.tabs.find(t => t.path === fullPath)
-  if (!existingTab) {
-    const title = getTabTitle(path, query)
-    tabsStore.addTab({
-      title,
-      path: fullPath,
-      closable: path !== '/dashboard'
-    })
-  } else {
-    tabsStore.setActiveTab(fullPath)
-  }
-}, { immediate: true, deep: true })
 </script>
 
 <style scoped>
@@ -198,54 +295,124 @@ watch(() => route, (newRoute) => {
   min-height: 100vh;
 }
 
-.el-header {
+.layout-header {
   background-color: var(--bg-primary);
   color: var(--text-primary);
   padding: 0;
   box-shadow: var(--shadow-sm);
+  height: 56px;
+  z-index: 20;
 }
 
 .header-content {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   height: 100%;
   padding: 0 20px;
+  gap: 8px;
 }
 
 .logo {
-  font-size: 20px;
+  font-size: 18px;
   font-weight: bold;
   color: var(--primary);
+  cursor: pointer;
+  flex-shrink: 0;
+  margin-right: 12px;
+  user-select: none;
 }
 
-.el-menu {
+.logo:hover {
+  opacity: 0.85;
+}
+
+.top-nav {
+  display: flex;
+  align-items: center;
   flex: 1;
-  border-bottom: none;
-  margin: 0 20px;
+  min-width: 0;
+  gap: 4px;
+  overflow: visible;
 }
 
-.top-menu {
-  background-color: var(--bg-primary) !important;
-}
-
-.top-menu .el-menu-item {
+.nav-item {
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  padding: 0 14px;
+  height: 56px;
+  line-height: 56px;
+  font-size: 14px;
   color: var(--text-secondary);
+  border-bottom: 2px solid transparent;
+  white-space: nowrap;
+  transition: color 0.2s, background-color 0.2s, border-color 0.2s;
 }
 
-.top-menu .el-menu-item:hover {
-  background-color: var(--bg-secondary) !important;
+.nav-item:hover {
+  color: var(--primary);
+  background-color: var(--bg-secondary);
+}
+
+.nav-item.active {
+  color: var(--primary);
+  background-color: var(--primary-lighter);
+  border-bottom-color: var(--primary);
+}
+
+.nav-more-wrap {
+  position: relative;
+}
+
+.nav-more-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.more-arrow {
+  font-size: 12px;
+}
+
+.more-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  min-width: 160px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: var(--shadow-sm, 0 4px 12px rgba(0, 0, 0, 0.08));
+  padding: 6px 0;
+  z-index: 100;
+}
+
+.more-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: none;
+  background: transparent;
+  padding: 10px 16px;
+  font-size: 14px;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.more-item:hover {
+  background: var(--bg-secondary);
   color: var(--primary);
 }
 
-.top-menu .el-menu-item.is-active {
-  background-color: var(--primary-lighter) !important;
+.more-item.active {
   color: var(--primary);
-  border-bottom: 2px solid var(--primary);
+  background: var(--primary-lighter);
 }
 
 .user-info {
   color: var(--text-secondary);
+  flex-shrink: 0;
+  margin-left: auto;
 }
 
 .el-dropdown-link {
@@ -259,27 +426,36 @@ watch(() => route, (newRoute) => {
   color: var(--primary);
 }
 
-.el-aside {
+.body-container {
+  flex: 1;
+  min-height: 0;
+  height: calc(100vh - 56px);
+}
+
+.layout-aside {
   background-color: var(--bg-secondary);
   border-right: 1px solid var(--border);
+  overflow-y: auto;
 }
 
-.el-aside .el-menu {
+.sidebar-menu {
   border-right: none;
-  margin: 0;
   background-color: var(--bg-secondary) !important;
+  height: 100%;
 }
 
-.sidebar-menu .el-menu-item {
+.sidebar-menu :deep(.el-menu-item),
+.sidebar-menu :deep(.el-sub-menu__title) {
   color: var(--text-secondary);
 }
 
-.sidebar-menu .el-menu-item:hover {
+.sidebar-menu :deep(.el-menu-item:hover),
+.sidebar-menu :deep(.el-sub-menu__title:hover) {
   background-color: var(--bg-tertiary) !important;
   color: var(--primary);
 }
 
-.sidebar-menu .el-menu-item.is-active {
+.sidebar-menu :deep(.el-menu-item.is-active) {
   background-color: var(--primary-lighter) !important;
   color: var(--primary);
 }
@@ -289,6 +465,7 @@ watch(() => route, (newRoute) => {
   flex-direction: column;
   flex: 1;
   overflow: hidden;
+  min-width: 0;
 }
 
 .el-main {

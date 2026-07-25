@@ -97,7 +97,8 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox, FormInstance, FormRules } from 'element-plus'
-import { getRoleList, addRole, updateRole, deleteRole, getRolePermissions, assignRolePermissions, getPermissionTree } from '@/api/role'
+import { getRoleList, addRole, updateRole, deleteRole, getRolePermissions, assignRolePermissions } from '@/api/role'
+import { getPermissionTree } from '@/api/permission'
 
 const loading = ref(false)
 const tableData = ref([])

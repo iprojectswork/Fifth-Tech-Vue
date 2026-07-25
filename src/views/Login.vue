@@ -36,8 +36,14 @@ import { ref, reactive } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, FormInstance, FormRules } from 'element-plus'
 import { login, getUserInfo, getMenus } from '@/api/auth'
+import { useTabsStore } from '@/store/tabs'
+import { useMenuStore } from '@/store/menu'
+import { WORKBENCH_PATH } from '@/constants/nav'
 
 const router = useRouter()
+// 登录成功：灌菜单进 Pinia、清空旧页签，落地工作台（B1）
+const tabsStore = useTabsStore()
+const menuStore = useMenuStore()
 const loginFormRef = ref<FormInstance>()
 const loading = ref(false)
 
@@ -75,9 +81,11 @@ const handleLogin = async () => {
           const menusRes = await getMenus()
           if (menusRes.code === 200) {
             localStorage.setItem('menus', JSON.stringify(menusRes.data))
+            menuStore.setMenus(menusRes.data)
           }
-          
-          router.push('/dashboard')
+
+          tabsStore.clearAll()
+          router.push(WORKBENCH_PATH) // 固定进工作台壳，不恢复上次业务页
         } else {
           ElMessage.error(res.data.message || '登录失败')
         }

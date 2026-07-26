@@ -33,19 +33,31 @@
 
 <script setup lang="ts">
 import { ref, reactive } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, FormInstance, FormRules } from 'element-plus'
-import { login, getUserInfo, getMenus } from '@/api/auth'
+import { login } from '@/api/auth'
 import { useTabsStore } from '@/store/tabs'
-import { useMenuStore } from '@/store/menu'
+import { usePermissionStore } from '@/store/permission'
 import { WORKBENCH_PATH } from '@/constants/nav'
 
 const router = useRouter()
-// 登录成功：灌菜单进 Pinia、清空旧页签，落地工作台（B1）
+const route = useRoute()
 const tabsStore = useTabsStore()
-const menuStore = useMenuStore()
+const permissionStore = usePermissionStore()
 const loginFormRef = ref<FormInstance>()
 const loading = ref(false)
+
+function resolvePostLoginPath(): string {
+  const raw = route.query.redirect
+  const redirect = typeof raw === 'string' ? raw : Array.isArray(raw) ? raw[0] : ''
+  if (!redirect || !redirect.startsWith('/') || redirect.startsWith('//')) {
+    return WORKBENCH_PATH
+  }
+  if (redirect === '/login' || redirect.startsWith('/login?')) {
+    return WORKBENCH_PATH
+  }
+  return redirect
+}
 
 const loginForm = reactive({
   username: '',
@@ -63,37 +75,26 @@ const rules: FormRules = {
 
 const handleLogin = async () => {
   if (!loginFormRef.value) return
-  
-  await loginFormRef.value.validate(async (valid) => {
-    if (valid) {
-      loading.value = true
-      try {
-        const res = await login(loginForm)
-        if (res.code === 200 && res.data.success) {
-          localStorage.setItem('token', res.data.token || '')
-          ElMessage.success('登录成功')
-          
-          const userInfoRes = await getUserInfo()
-          if (userInfoRes.code === 200) {
-            localStorage.setItem('userInfo', JSON.stringify(userInfoRes.data))
-          }
-          
-          const menusRes = await getMenus()
-          if (menusRes.code === 200) {
-            localStorage.setItem('menus', JSON.stringify(menusRes.data))
-            menuStore.setMenus(menusRes.data)
-          }
 
-          tabsStore.clearAll()
-          router.push(WORKBENCH_PATH) // 固定进工作台壳，不恢复上次业务页
-        } else {
-          ElMessage.error(res.data.message || '登录失败')
-        }
-      } catch (error) {
-        ElMessage.error('登录失败')
-      } finally {
-        loading.value = false
+  await loginFormRef.value.validate(async (valid) => {
+    if (!valid) return
+    loading.value = true
+    try {
+      const res = await login(loginForm)
+      if (res.code === 200 && res.data.success) {
+        localStorage.setItem('token', res.data.token || '')
+        ElMessage.success('登录成功')
+        tabsStore.clearAll()
+        permissionStore.reset()
+        await permissionStore.bootstrap()
+        await router.replace(resolvePostLoginPath())
+      } else {
+        ElMessage.error(res.data.message || '登录失败')
       }
+    } catch {
+      ElMessage.error('登录失败')
+    } finally {
+      loading.value = false
     }
   })
 }

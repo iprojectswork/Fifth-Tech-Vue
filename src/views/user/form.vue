@@ -1,7 +1,7 @@
 <template>
   <div class="user-form-container">
     <div class="toolbar">
-      <el-button type="primary" @click="handleSubmit">保存</el-button>
+      <el-button v-if="canSave" type="primary" @click="handleSubmit">保存</el-button>
       <el-button @click="handleBack">关闭</el-button>
     </div>
     <el-card class="form-card" shadow="never">
@@ -12,32 +12,32 @@
         <el-row :gutter="20">
           <el-col :span="12">
             <el-form-item label="用户名" prop="username">
-              <el-input v-model="form.username" :disabled="isEdit" />
+              <el-input v-model="form.username" :disabled="isEdit || isReadonly" />
             </el-form-item>
           </el-col>
-          <el-col :span="12" v-if="!isEdit">
+          <el-col :span="12" v-if="!isEdit && !isReadonly">
             <el-form-item label="密码" prop="password">
               <el-input v-model="form.password" type="password" />
             </el-form-item>
           </el-col>
           <el-col :span="12">
             <el-form-item label="昵称" prop="nickname">
-              <el-input v-model="form.nickname" />
+              <el-input v-model="form.nickname" :disabled="isReadonly" />
             </el-form-item>
           </el-col>
           <el-col :span="12">
             <el-form-item label="邮箱" prop="email">
-              <el-input v-model="form.email" />
+              <el-input v-model="form.email" :disabled="isReadonly" />
             </el-form-item>
           </el-col>
           <el-col :span="12">
             <el-form-item label="手机号" prop="phone">
-              <el-input v-model="form.phone" />
+              <el-input v-model="form.phone" :disabled="isReadonly" />
             </el-form-item>
           </el-col>
           <el-col :span="12">
             <el-form-item label="状态" prop="status">
-              <el-select v-model="form.status" placeholder="请选择状态">
+              <el-select v-model="form.status" placeholder="请选择状态" :disabled="isReadonly">
                 <el-option label="未启用" :value="0" />
                 <el-option label="启用" :value="1" />
                 <el-option label="禁用" :value="2" />
@@ -66,18 +66,36 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { useRoute } from 'vue-router'
 import type { FormInstance, FormRules } from 'element-plus'
 import { addUser, updateUser, getUserById, type User } from '@/api/user'
 import { useNavigation } from '@/composables/useNavigation'
+import { usePermissionStore } from '@/store/permission'
 
 const route = useRoute()
-// 关闭/保存成功必须关页签，不能只 router.push 列表（否则页签残留）
 const { closeCurrentTab } = useNavigation()
+const permissionStore = usePermissionStore()
 const formRef = ref<FormInstance>()
 const isEdit = ref(false)
+
+const isReadonly = computed(() => {
+  if (route.query.mode === 'view') return true
+  if (route.query.mode === 'edit') return !permissionStore.hasCode('system:user:edit')
+  if (route.query.mode === 'create' || !route.query.id) {
+    return !permissionStore.hasCode('system:user:add')
+  }
+  return !permissionStore.hasCode('system:user:edit')
+})
+
+const canSave = computed(() => {
+  if (isReadonly.value) return false
+  if (route.query.mode === 'create' || !route.query.id) {
+    return permissionStore.hasCode('system:user:add')
+  }
+  return permissionStore.hasCode('system:user:edit')
+})
 
 const form = reactive<User>({
   username: '',
@@ -125,7 +143,7 @@ const fetchUserDetail = async (id: number) => {
 }
 
 const handleSubmit = async () => {
-  if (!formRef.value) return
+  if (!formRef.value || !canSave.value) return
   await formRef.value.validate(async (valid) => {
     if (valid) {
       try {
@@ -148,7 +166,6 @@ const handleSubmit = async () => {
   })
 }
 
-/** 工具栏「关闭」与保存成功：关掉当前详情 tab，再按邻近规则切换 */
 const handleBack = async () => {
   await closeCurrentTab('/system/user/list')
 }

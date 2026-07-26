@@ -1,6 +1,5 @@
 /**
- * Vue Router meta 扩展（页签 / 侧栏）
- * 业务路由在 router/index.ts 配置；后续可由后端菜单字段映射到同结构。
+ * Vue Router meta 扩展（页签 / 侧栏 / B2 权限）
  */
 import 'vue-router'
 import type { TabKind } from '@/store/tabs'
@@ -29,6 +28,12 @@ declare module 'vue-router' {
     newTitle?: string
     /** 业务主键 query 名，默认 id */
     idQueryKey?: string
+    /** 菜单/按钮权限码 */
+    permissionCode?: string
+    /** 打开已有单据所需码 */
+    detailCodes?: string[]
+    /** 新建所需码 */
+    createCodes?: string[]
   }
 }
 

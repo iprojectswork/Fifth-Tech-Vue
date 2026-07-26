@@ -25,8 +25,12 @@
       <template #header>
         <div class="card-header">
           <div class="card-header-left">
-            <el-button type="primary" @click="handleAdd">新增</el-button>
-            <el-dropdown @command="handleBatchStatusChange" :disabled="selectedRows.length === 0">
+            <el-button v-permission="'system:user:add'" type="primary" @click="handleAdd">新增</el-button>
+            <el-dropdown
+              v-permission="'system:user:edit'"
+              @command="handleBatchStatusChange"
+              :disabled="selectedRows.length === 0"
+            >
               <el-button :disabled="selectedRows.length === 0">
                 状态变更
                 <el-icon class="el-icon--right"><arrow-down /></el-icon>
@@ -38,17 +42,34 @@
                 </el-dropdown-menu>
               </template>
             </el-dropdown>
-            <el-button type="danger" @click="handleBatchDelete" :disabled="selectedRows.length === 0">批量删除</el-button>
+            <el-button
+              v-permission="'system:user:delete'"
+              type="danger"
+              @click="handleBatchDelete"
+              :disabled="selectedRows.length === 0"
+            >批量删除</el-button>
           </div>
           <span v-if="selectedRows.length > 0" class="selected-info">已选择 {{ selectedRows.length }} 项</span>
         </div>
       </template>
 
       <div class="table-wrapper">
-        <el-table :data="tableData" border style="width: 100%" @selection-change="handleSelectionChange">
+        <el-table
+          :data="tableData"
+          border
+          style="width: 100%"
+          @selection-change="handleSelectionChange"
+          @row-dblclick="handleRowDblClick"
+        >
           <el-table-column type="selection" width="55" />
           <el-table-column prop="id" label="ID" width="80" />
-          <el-table-column prop="username" label="用户名" width="120" />
+          <el-table-column prop="username" label="用户名" width="120">
+            <template #default="{ row }">
+              <el-link type="primary" :underline="false" @click.stop="handleOpenView(row)">
+                {{ row.username }}
+              </el-link>
+            </template>
+          </el-table-column>
           <el-table-column prop="nickname" label="昵称" width="120" />
           <el-table-column prop="email" label="邮箱" width="180" />
           <el-table-column prop="phone" label="手机号" width="120" />
@@ -73,8 +94,18 @@
           </el-table-column>
           <el-table-column label="操作" width="200" fixed="right">
             <template #default="{ row }">
-              <el-button type="primary" size="small" @click="handleEdit(row)">编辑</el-button>
-              <el-button type="danger" size="small" @click="handleDelete(row)">删除</el-button>
+              <el-button
+                v-permission="'system:user:edit'"
+                type="primary"
+                size="small"
+                @click="handleEdit(row)"
+              >编辑</el-button>
+              <el-button
+                v-permission="'system:user:delete'"
+                type="danger"
+                size="small"
+                @click="handleDelete(row)"
+              >删除</el-button>
             </template>
           </el-table-column>
         </el-table>
@@ -99,10 +130,9 @@
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { ArrowDown } from '@element-plus/icons-vue'
-import { useRouter } from 'vue-router'
 import { getUserList, deleteUser, updateUserStatus, type User, type UserQuery } from '@/api/user'
+import { openDoc } from '@/utils/open-doc'
 
-const router = useRouter()
 const tableData = ref<User[]>([])
 const total = ref(0)
 const selectedRows = ref<User[]>([])
@@ -141,11 +171,28 @@ const handleReset = () => {
 }
 
 const handleAdd = () => {
-  router.push('/system/user/form')
+  void openDoc({ docType: 'user', mode: 'create' })
 }
 
 const handleEdit = (row: User) => {
-  router.push(`/system/user/form?id=${row.id}&username=${row.username}`)
+  void openDoc({
+    docType: 'user',
+    id: row.id,
+    mode: 'edit',
+    query: { username: row.username }
+  })
+}
+
+const handleOpenView = (row: User) => {
+  void openDoc({
+    docType: 'user',
+    id: row.id,
+    query: { username: row.username }
+  })
+}
+
+const handleRowDblClick = (row: User) => {
+  handleOpenView(row)
 }
 
 const handleDelete = (row: User) => {

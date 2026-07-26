@@ -17,7 +17,7 @@
 
     <el-card class="table-card">
       <div class="table-header">
-        <el-button type="primary" @click="handleAdd">新增</el-button>
+        <el-button v-permission="'system:permission:add'" type="primary" @click="handleAdd">新增</el-button>
       </div>
       <el-table :data="tableData" v-loading="loading" row-key="id">
         <el-table-column prop="permissionName" label="权限名称" />
@@ -41,8 +41,18 @@
         </el-table-column>
         <el-table-column label="操作" width="150" fixed="right">
           <template #default="{ row }">
-            <el-button type="primary" link @click="handleEdit(row)">编辑</el-button>
-            <el-button type="danger" link @click="handleDelete(row)">删除</el-button>
+            <el-button
+              v-permission="'system:permission:edit'"
+              type="primary"
+              link
+              @click="handleEdit(row)"
+            >编辑</el-button>
+            <el-button
+              v-permission="'system:permission:delete'"
+              type="danger"
+              link
+              @click="handleDelete(row)"
+            >删除</el-button>
           </template>
         </el-table-column>
       </el-table>

@@ -279,13 +279,12 @@ const handleCommand = async (command: string) => {
     } catch {
       // 登出接口失败仍清本地会话
     }
-    localStorage.removeItem('token')
-    localStorage.removeItem('userInfo')
-    localStorage.removeItem('menus')
+    const { clearAuthSession } = await import('@/utils/auth-session')
+    clearAuthSession()
     clearSessionNav()
     ElMessage.success('退出登录成功')
     const { default: router } = await import('@/router')
-    router.push('/login')
+    await router.push('/login')
   }
 }
 </script>

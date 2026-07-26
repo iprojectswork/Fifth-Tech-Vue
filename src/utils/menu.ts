@@ -106,9 +106,19 @@ export function resolveDomainIdByPath(
       if (leaf?.startsWith(prefix)) return domain.id
       if (domain.path === prefix || domain.path?.startsWith(prefix)) return domain.id
     }
+    return syntheticDomainId(segment)
   }
 
   return null
+}
+
+export function syntheticDomainId(segment: string): DomainId {
+  let h = 0
+  for (let i = 0; i < segment.length; i++) {
+    h = (h * 31 + segment.charCodeAt(i)) | 0
+  }
+  const n = Math.abs(h) || 1
+  return -n
 }
 
 /** 当前域侧栏树 = 一级域的 children */

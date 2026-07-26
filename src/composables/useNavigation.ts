@@ -158,10 +158,12 @@ export function useNavigation() {
     )
   })
 
-  const showSidebar = computed(() => shellDomainId.value != null)
-  const showTabsBar = computed(() => shellDomainId.value != null && tabsStore.tabs.length > 0)
-
   const sidebarMenus = computed(() => getSidebarTree(menuStore.menuTree, shellDomainId.value))
+
+  const showSidebar = computed(
+    () => shellDomainId.value != null && sidebarMenus.value.length > 0
+  )
+  const showTabsBar = computed(() => shellDomainId.value != null && tabsStore.tabs.length > 0)
 
   /** 侧栏高亮：详情优先 tab.menuPath / meta.activeMenu */
   const sidebarActivePath = computed(() => {
@@ -185,9 +187,10 @@ export function useNavigation() {
 
   async function navigateFullPath(fullPath: string): Promise<void> {
     const { path, query } = parseFullPath(fullPath)
+    const current = router.currentRoute.value
     if (
-      route.fullPath === fullPath ||
-      (route.path === path && JSON.stringify(route.query) === JSON.stringify(query))
+      current.fullPath === fullPath ||
+      (current.path === path && JSON.stringify(current.query) === JSON.stringify(query))
     ) {
       return
     }
@@ -311,10 +314,6 @@ export function useNavigation() {
     }
   }
 
-  /**
-   * 表单页「关闭/返回/保存成功」用：关掉当前路由对应 tab。
-   * 不要只 router.push 列表，否则页签残留。
-   */
   async function closeCurrentTab(fallbackPath?: string): Promise<void> {
     const tab =
       tabsStore.findByPath(route.fullPath) ||
@@ -323,11 +322,15 @@ export function useNavigation() {
       await closeTabKey(tab.key)
       return
     }
-    if (fallbackPath) {
+    const listPath = fallbackPath?.split('?')[0]
+    const canList =
+      listPath &&
+      menuStore.flatMenus.some((m) => m.path === listPath)
+    if (canList && fallbackPath) {
       await openPath(fallbackPath)
-    } else {
-      await goWorkbench()
+      return
     }
+    await goWorkbench()
   }
 
   /**

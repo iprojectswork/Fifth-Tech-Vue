@@ -8,5 +8,6 @@ export const routeEnhancers: Readonly<Record<string, Partial<RouteMeta>>> = {
   'system:role:list': { kind: 'list' },
   'system:permission:list': { kind: 'list' },
   'system:cache:list': { kind: 'list' },
-  'system:code:list': { kind: 'list' }
+  'system:code:list': { kind: 'list' },
+  'system:dict:list': { kind: 'list' }
 }
